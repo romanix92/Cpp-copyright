@@ -42,7 +42,6 @@ class NoticeData:
         self.mode = mode
     def setData(self, text, argData):
         old = OldNotice(text)
-        print(self.mode)
         if self.mode == "replace":
             self.authors = argData.authors if argData.authors else old.authors
             print(self.authors)
@@ -51,36 +50,45 @@ class NoticeData:
             self.authors = old.authors if old.authors else argData.authors
             self.company = old.company if old.company else argData.company
         self.description = old.description if old.description else "TODO\n"
+        self.text = text
 
+class CStyleWriter:
+    oldNotice = re.compile("/[*]{79}.*[*]{78}/\s*", re.S)
+    classes = re.compile('(?<=class\s)\w+')
+    def __init__(self, filename, data):
+        self.fd = fd
+        self.data = data
+        self.date = datetime.datetime.fromtimestamp(os.path.getmtime(filename)).strftime("%x %X")
+        self.filename = filename
+    def write(self):
+        with open(self.filename, "w") as fd:
+            text = CStyleWriter.oldNotice.sub("", self.data.text)
+            fd.write("/*******************************************************************************\n")
+            fd.write(" * Copyright: %s. All rights reserved.\n" % self.data.company)
+            fd.write(" * File name: %s\n" % re.search("[^/]*$", self.filename).group())
+            fd.write(" * Authors  : %s\n" %  self.data.authors)
+            fd.write(" * Modification date: %s\n" % self.date)
+            foundClasses = CStyleWriter.classes.findall(self.data.text)
+            if foundClasses:
+                fd.write(" * Classes: %s\n" % str(foundClasses))
+            fd.write(" * Description: " + self.data.description)
+            fd.write(" ******************************************************************************/\n\n")
+            fd.write(text)
 
-######   Script start   #######
+###### ######   Script start   ###### #######
 
 argData = ArgParser.ParseArgs(list(sys.argv))
 print("Files:")
 print(argData.files)
 notice = NoticeData(argData.mode)
-oldNotice = re.compile("/[*]{79}.*[*]{78}/\s*", re.S)
-classes = re.compile('(?<=class\s)\w+')
 
 for filename in argData.files:
     try:
         with open(filename) as fd:
             orig = fd.read()
-            date = datetime.datetime.fromtimestamp(os.path.getmtime(filename)).strftime("%x %X")
     except IOError:
         print("Cannot open file ", filename)
         continue
-    with open(filename, "w") as fd:
-        notice.setData(orig, argData)
-        orig = oldNotice.sub("", orig)
-        fd.write("/*******************************************************************************\n")
-        fd.write(" * Copyright: %s. All rights reserved.\n" % notice.company)
-        fd.write(" * File name: %s\n" % re.search("[^/]*$", filename).group())
-        fd.write(" * Authors  : %s\n" %  notice.authors)
-        fd.write(" * Modification date: %s\n" % date)
-        foundClasses = classes.findall(orig)
-        if foundClasses:
-            fd.write(" * Classes: %s\n" % str(foundClasses))
-        fd.write(" * Description: " + notice.description)
-        fd.write(" ******************************************************************************/\n\n")
-        fd.write(orig)
+    notice.setData(orig, argData)
+    writer = CStyleWriter(filename, notice)
+    writer.write()
